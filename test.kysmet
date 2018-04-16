@@ -1,0 +1,197 @@
+testjumpf:
+	jumpf $u0,endjumpf1
+	trap
+endjumpf1:
+	allen
+	li $u0,1
+	jumpf $u0,endjumpf2
+	jump testadd
+endjumpf2:
+	trap
+testadd:
+	li $u1,-10
+	li $u2,10
+	add $u0,$u1,$u2
+	jumpf $u0,testand
+	trap
+testand:
+	allen
+	li $u1,6
+	li $u2,4
+	li $u3,-4
+	and $u1,$u1,$u2
+	add $u0,$u1,$u3
+	jumpf $u0,testmul
+	trap
+testmul:
+	allen
+	li $u1,10
+	li $u2,12
+	li $u3,-120
+	mul $u1,$u1,$u2
+	add $u0,$u1,$u3
+	jumpf $u0,testor
+	trap
+testor:
+	allen
+	li $u1,8
+	li $u2,16
+	li $u3,-24
+	or $u1,$u1,$u2
+	add $u0,$u1,$u3
+	jumpf $u0,testsll
+	trap
+testsll:
+	allen
+	li $u1,1
+	li $u2,4
+	li $u3,-16
+	sll $u1,$u1,$u2
+	add $u0,$u1,$u3
+	jumpf $u0,testslt
+	trap
+testslt:
+	allen
+	li $u1,2
+	li $u2,3
+	slt $u3,$u1,$u2
+	li $u4,-1
+	add $u0,$u4,$u3
+	jumpf $u0,testsra
+	trap
+testsra:
+	allen
+	li $u1,-16
+	li $u2,5
+	li $u3,1
+	sra $u1,$u1,$u2
+	add $u0,$u3,$u1
+	jumpf $u0,testxor
+	trap
+testxor:
+	allen
+	li $u1,24
+	li $u2,12
+	li $u3,-20
+	xor $u1,$u1,$u2
+	add $u0,$u1,$u3
+	jumpf $u0,testlnot
+	trap
+testlnot:
+	allen
+	li $u1,-1
+	lnot $u0,$u1
+	jumpf $u0,testneg
+	trap
+testneg:
+	allen
+	li $u1,1
+	neg $u2,$u1
+	add $u0,$u1,$u2
+	jumpf $u0,testcall
+	trap
+testcall:
+	allen
+	call calla
+	jumpf $u0,testgor
+	trap
+testgor:
+	allen
+	li $u1,1000
+	li $u2,-1000
+	li $u0,50
+	gor $u0,$u1
+	add $u0,$u0,$u2
+	jumpf $u0,testleft
+	trap
+testleft:
+	allen
+	li $u1,1000
+	li $u2,-1000
+	li $u0,50
+	left $u0,$u1
+	add $u0,$u0,$u2
+	jumpf $u0,testright
+	trap
+testright:
+	allen
+	li $u1,1000
+	li $u2,-1000
+	li $u0,50
+	right $u0,$u1
+	add $u0,$u0,$u2
+	jumpf $u0,testjump
+	trap
+testjump:
+	allen
+	jump testenable
+	trap
+testenable:
+	li $u0,0
+	li $u1,-10
+	li $u2,10
+	jumpf $u0,testenable2
+	trap
+testenable2:
+	add $u1,$u1,$u2
+	pushen
+	call calla
+	jump testenable3
+	trap
+testenable3:
+	jumpf $u0,testenable4
+	trap
+testenable4:
+	allen
+	add $u1,$u1,$u2
+	jumpf $u1,testenable5
+	trap
+testenable5:
+	allen
+	li $u1,-10
+	li $u2,10
+	popen
+	add $u1,$u1,$u2
+	popen
+	jumpf $u1,kill
+	add $u1,$u1,$u2
+	jumpf $u1,testloadstore
+	trap
+testloadstore:
+	allen
+	li $u1,-10
+	li $u2,10
+	li $u4,500
+	li $u3,10000
+	store $u2,$u3
+	load $u4,$u3
+	add $u0,$u1,$u4
+	jumpf $u0,success
+	trap
+success:
+	allen
+	li $u0, 1001
+	trap
+
+calla:
+	call callb
+	and $u0,$u1,$u2
+	li $u0,0
+	ret
+
+callb:
+	call callc
+	or $u0,$u1,$u2
+	ret
+
+callc:
+	call calld
+	xor $u0,$u1,$u2
+	ret
+
+calld:
+	mul $u0,$u1,$u2
+	ret
+
+kill:
+	trap

@@ -1,0 +1,22 @@
+.lowfirst = 0
+
+.NOARG := 0:4 0:8 .this:4
+.alias .NOARG trap ret allen popen pushen
+
+.THREEARG $.d, $.s, $.t := .this:4 .d:4 .s:4 .t:4
+.alias .THREEARG 1 add and mul or sll slt sra xor
+
+li8 $.d, .i8 := 9:4 .d:4 .i8:8
+lu8 $.d, .i8 := 10:4 .d:4 .i8:8
+
+li $.d, .i16 ?(.i16 <= 127 && .i16 >= -128) := 9:4 .d:4 .i16:8
+li $.d, .i16 := 9:4 .d:4 (.i16 & 0xff):8 10:4 .d:4 (.i16 >> 8):8
+
+.TWOARG $.d, $.s := 11:4 .d:4 .s:4 .this:4
+.alias .TWOARG 5 gor left lnot load neg right store
+
+call .addr := 12:4 0:4 (.addr & 0xff):8 15:4 0:4 (.addr >> 8):8
+jump .addr := 13:4 0:4 (.addr & 0xff):8 15:4 0:4 (.addr >> 8):8
+jumpf $.d, .addr := 14:4 .d:4 (.addr & 0xff):8 15:4 0:4 (.addr >> 8):8
+
+.const {zero IPROC NPROC sp fp rv u0 u1 u2 u3 u4 u5 u6 u7 u8 u9}
