@@ -119,78 +119,43 @@ always @(ir) begin
 end
 endmodule
 
-/* Main processor module */
-module processor(halt, reset, clk);
-output reg halt;
+/* Control unit */
+module CU(halt, reset, clk);
+output halt;
 input reset, clk;
 
-reg `WORD regfile `REGSIZE;
 reg `WORD instrmem `MEMSIZE;
-reg `WORD datamem `MEMSIZE;
 reg `CALLSIZE callstack = 0;
 reg `CALLSIZE callstackcopy = 0;
-reg `ENSIZE enstack = ~0;
-reg `WORD pc, ir, newpc, s1sval, s1dval, s1tval, s2val, sval, dval, tval, addr, res;
-reg `OP s0op, s1op, s2op;
+reg `WORD pc, ir, newpc,  addr;
+reg `OP s0op;
 wire `OP op;
 wire `REGNAME regdst;
-reg `REGNAME s0regdst, s1regdst, s2regdst, s0s, s0d, s0t;
-wire `WORD alures;
+reg `REGNAME s0regdst, s0s, s0d, s0t;
 
 decode decoder(op, regdst, ir);
-alu myalu(alures, s1op, s1sval, s1tval);
+PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst);
 
 always @(reset) begin
-  halt = 0;
   pc = 0;
   s0op = `OPnop;
-  s1op = `OPnop;
-  s2op = `OPnop;
-  s1regdst = 0;
-  s2regdst = 0;
   s0s = 0;
   s0d = 0;
   s0t = 0;
-  $readmemh0(regfile);
   $readmemh1(instrmem);
 end
 
 /* update with next instruction */
 always @(*) ir = instrmem[pc];
 
-/* determine which result to save into a register */
-always @(*) begin
-  if (s1op == `OPload) res = datamem[s1sval];
-  else res = alures;
-end
-
 /* Get new PC value */
 always @(*) begin
-  if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
-  else if (op == `OPaddr && s0op == `OPjumpf && dval == 0) newpc = addr;
-  else if (op == `OPret) newpc = callstack[15:0] + 2;
-  else newpc = pc + 1;
-end
-
-// compute sval with value forwarding
-always @(*) begin
-  if (s1regdst != 0 && (s0s == s1regdst)) sval = res;
-  else if (s2regdst != 0 && (s0s == s2regdst)) sval = s2val;
-  else sval = regfile[s0s];
-end
-
-// compute dval with value forwarding
-always @(*) begin
-  if (s1regdst != 0 && (s0d == s1regdst)) dval = res;
-  else if (s2regdst != 0 && (s0d == s2regdst)) dval = s2val;
-  else dval = regfile[s0d];
-end
-
-// compute tval with value forwarding
-always @(*) begin
-  if (s1regdst != 0 && (s0t == s1regdst)) tval = res;
-  else if (s2regdst != 0 && (s0t == s2regdst)) tval = s2val;
-  else tval = regfile[s0t];
+  // Ignore jump, call, ret, jumpf for now
+  // if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
+  // else if (op == `OPaddr && s0op == `OPjumpf && dval == 0) newpc = addr;
+  // else if (op == `OPret) newpc = callstack[15:0] + 2;
+  // else
+  newpc = pc + 1;
 end
 
 // compute current jump address
@@ -213,6 +178,61 @@ always @(posedge clk) if (!halt) begin
   s0d <= ir `D;
   s0t <= ir `T;
   pc <= newpc;
+end
+
+endmodule
+
+/* Processing element */
+module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst);
+input reset, clk;
+output reg halt;
+input `REGNAME s0s, s0d, s0t, s0regdst;
+input `OP s0op;
+
+reg `WORD regfile `REGSIZE;
+reg `WORD datamem `MEMSIZE;
+reg `ENSIZE enstack = ~0;
+reg `REGNAME s1regdst, s2regdst;
+reg `WORD s1sval, s1dval, s1tval, s2val, sval, dval, tval, res;
+reg `OP s1op, s2op;
+wire `WORD alures;
+
+alu myalu(alures, s1op, s1sval, s1tval);
+
+always @(reset) begin
+  halt = 0;
+  s1regdst = 0;
+  s2regdst = 0;
+  s1op = `OPnop;
+  s2op = `OPnop;
+  $readmemh0(regfile);
+end
+
+/* determine which result to save into a register */
+always @(*) begin
+  if (s1op == `OPload) res = datamem[s1sval];
+  else res = alures;
+end
+
+// compute sval with value forwarding
+always @(*) begin
+  if (s1regdst != 0 && (s0s == s1regdst)) sval = res;
+  else if (s2regdst != 0 && (s0s == s2regdst)) sval = s2val;
+  else sval = regfile[s0s];
+end
+
+// compute dval with value forwarding
+always @(*) begin
+  if (s1regdst != 0 && (s0d == s1regdst)) dval = res;
+  else if (s2regdst != 0 && (s0d == s2regdst)) dval = s2val;
+  else dval = regfile[s0d];
+end
+
+// compute tval with value forwarding
+always @(*) begin
+  if (s1regdst != 0 && (s0t == s1regdst)) tval = res;
+  else if (s2regdst != 0 && (s0t == s2regdst)) tval = s2val;
+  else tval = regfile[s0t];
 end
 
 /* Stage 1 - Register read */
@@ -260,7 +280,7 @@ module testbench;
 reg reset = 0;
 reg clk = 0;
 wire halted;
-processor PE(halted, reset, clk);
+CU cu(halted, reset, clk);
 initial begin
   $dumpfile;
   $dumpvars;
