@@ -132,9 +132,10 @@ reg `OP s0op;
 wire `OP op;
 wire `REGNAME regdst;
 reg `REGNAME s0regdst, s0s, s0d, s0t;
+wire `WORD dval;
 
 decode decoder(op, regdst, ir);
-PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst);
+PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval);
 
 always @(reset) begin
   pc = 0;
@@ -151,11 +152,10 @@ always @(*) ir = instrmem[pc];
 /* Get new PC value */
 always @(*) begin
   // Ignore jump, call, ret, jumpf for now
-  // if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
-  // else if (op == `OPaddr && s0op == `OPjumpf && dval == 0) newpc = addr;
-  // else if (op == `OPret) newpc = callstack[15:0] + 2;
-  // else
-  newpc = pc + 1;
+  if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
+  else if (op == `OPaddr && s0op == `OPjumpf && dval == 0) newpc = addr;
+  else if (op == `OPret) newpc = callstack[15:0] + 2;
+  else newpc = pc + 1;
 end
 
 // compute current jump address
@@ -183,17 +183,18 @@ end
 endmodule
 
 /* Processing element */
-module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst);
+module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval);
 input reset, clk;
 output reg halt;
 input `REGNAME s0s, s0d, s0t, s0regdst;
 input `OP s0op;
+output reg `WORD dval;
 
 reg `WORD regfile `REGSIZE;
 reg `WORD datamem `MEMSIZE;
 reg `ENSIZE enstack = ~0;
 reg `REGNAME s1regdst, s2regdst;
-reg `WORD s1sval, s1dval, s1tval, s2val, sval, dval, tval, res;
+reg `WORD s1sval, s1dval, s1tval, s2val, sval, tval, res;
 reg `OP s1op, s2op;
 wire `WORD alures;
 
