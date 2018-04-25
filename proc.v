@@ -10,6 +10,7 @@
 `define S         [7:4]
 `define T         [3:0]
 `define IMMED     [7:0]
+`define NPROC     2
 
 // OPS for instructions with unique opcodes
 `define OPadd    4'b0001
@@ -66,8 +67,6 @@ always @(op, in1, in2) begin
     `OPxor: begin result = in1 ^ in2; end
     `OPlnot: begin result = ~in1; end
     `OPneg: begin result = -in1; end
-    `OPleft: begin result = in1; end
-    `OPright: begin result = in1; end
     `OPgor: begin result = in1; end
     `OPli8: begin result = in1; end
     `OPlu8: begin result = in1; end
@@ -133,9 +132,28 @@ wire `OP op;
 wire `REGNAME regdst;
 reg `REGNAME s0regdst, s0s, s0d, s0t;
 wire `WORD dval;
+wire `WORD comm[(`NPROC - 1):0];
+
 
 decode decoder(op, regdst, ir);
-PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval);
+
+genvar i;
+for (i=0; i<`NPROC; i=i+1) begin
+/*
+  integer left;
+  if (i - 1 == -1) begin
+    assign left <= `NPROC - 1;
+  end else begin
+    assign left <= i - 1;
+  end
+  integer rights;
+  if (i + 1 == `NPROC) begin
+    assign right <= 0;
+  end else begin
+    assign right <= i + 1;
+  end*/
+  PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1]);
+end
 
 always @(reset) begin
   pc = 0;
@@ -183,12 +201,15 @@ end
 endmodule
 
 /* Processing element */
-module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval);
+module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval, comm, left, right);
 input reset, clk;
 output reg halt;
 input `REGNAME s0s, s0d, s0t, s0regdst;
 input `OP s0op;
 output reg `WORD dval;
+output reg `WORD comm;
+input `WORD left;
+input `WORD right;
 
 reg `WORD regfile `REGSIZE;
 reg `WORD datamem `MEMSIZE;
@@ -207,11 +228,18 @@ always @(reset) begin
   s1op = `OPnop;
   s2op = `OPnop;
   $readmemh0(regfile);
+  //regfile[2] = IPROC;
 end
 
 /* determine which result to save into a register */
 always @(*) begin
+  $display("u0: %d\n", regfile[6]);
+  $display("u1: %d\n", regfile[7]);
+  $display("u2: %d\n", regfile[8]);
+  $display("u3: %d\n", regfile[9]);
   if (s1op == `OPload) res = datamem[s1sval];
+  else if (s1op == `OPleft) res = left;
+  else if (s1op == `OPright) res = right;
   else res = alures;
 end
 
@@ -238,6 +266,9 @@ end
 
 /* Stage 1 - Register read */
 always @(posedge clk) if (!halt) begin
+  if (s0op == `OPleft || s0op == `OPright) begin
+    comm <= sval;
+  end
   if (s0op == `OPli8) begin
     s1sval <= {{8{s0s[3]}}, s0s, s0t};
   end else if (s0op == `OPlu8) begin
