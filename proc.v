@@ -131,28 +131,15 @@ reg `OP s0op;
 wire `OP op;
 wire `REGNAME regdst;
 reg `REGNAME s0regdst, s0s, s0d, s0t;
-wire `WORD dval;
 wire `WORD comm[(`NPROC - 1):0];
+wire [`NPROC - 1:0] enbits;
 
 
 decode decoder(op, regdst, ir);
 
 genvar i;
 for (i=0; i<`NPROC; i=i+1) begin
-/*
-  integer left;
-  if (i - 1 == -1) begin
-    assign left <= `NPROC - 1;
-  end else begin
-    assign left <= i - 1;
-  end
-  integer rights;
-  if (i + 1 == `NPROC) begin
-    assign right <= 0;
-  end else begin
-    assign right <= i + 1;
-  end*/
-  PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1]);
+  PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1], enbits[i]);
 end
 
 always @(reset) begin
@@ -171,7 +158,7 @@ always @(*) ir = instrmem[pc];
 always @(*) begin
   // Ignore jump, call, ret, jumpf for now
   if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
-  else if (op == `OPaddr && s0op == `OPjumpf && dval == 0) newpc = addr;
+  else if (op == `OPaddr && s0op == `OPjumpf && enbits == 0) newpc = addr;
   else if (op == `OPret) newpc = callstack[15:0] + 2;
   else newpc = pc + 1;
 end
@@ -201,21 +188,21 @@ end
 endmodule
 
 /* Processing element */
-module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, dval, comm, left, right);
+module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm, left, right, enbit);
 input reset, clk;
 output reg halt;
 input `REGNAME s0s, s0d, s0t, s0regdst;
 input `OP s0op;
-output reg `WORD dval;
 output reg `WORD comm;
 input `WORD left;
 input `WORD right;
+output reg enbit;
 
 reg `WORD regfile `REGSIZE;
 reg `WORD datamem `MEMSIZE;
 reg `ENSIZE enstack = ~0;
 reg `REGNAME s1regdst, s2regdst;
-reg `WORD s1sval, s1dval, s1tval, s2val, sval, tval, res;
+reg `WORD s1sval, s1dval, s1tval, s2val, sval, dval, tval, res;
 reg `OP s1op, s2op;
 wire `WORD alures;
 
@@ -241,6 +228,11 @@ always @(*) begin
   else if (s1op == `OPleft) res = left;
   else if (s1op == `OPright) res = right;
   else res = alures;
+end
+
+// Determine future enable status for jumpf
+always @(*) begin
+  enbit = (enstack[0] && dval);
 end
 
 // compute sval with value forwarding
@@ -290,10 +282,10 @@ always @(posedge clk) if (!halt) begin
   if (s1op == `OPallen) enstack <= {enstack[31:1], 1'b1};
   if (s1op == `OPpushen) enstack <= {enstack[30:0], enstack[0]};
   if (s1op == `OPpopen) enstack <= {enstack[31], enstack[31:1]};
+  if (s1op == `OPtrap) halt <= 1;
   if (enstack[0] == 1) begin
     // Enabled
     if (s1op == `OPstore) datamem[s1sval] <= s1dval;
-    if (s1op == `OPtrap) halt <= 1;
     s2regdst <= s1regdst;
   end else begin
     // Disabled
