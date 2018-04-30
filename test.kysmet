@@ -153,8 +153,6 @@ testenable5:
 	popen
 	add $u1,$u1,$u2
 	popen
-	jumpf $u1,kill
-	add $u1,$u1,$u2
 	jumpf $u1,testloadstore
 	trap
 testloadstore:
