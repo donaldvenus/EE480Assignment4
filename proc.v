@@ -1,3 +1,4 @@
+/* General defines */
 `define WORD      [15:0]
 `define INT       [31:0]
 `define REGSIZE   [15:0]
@@ -13,7 +14,7 @@
 `define IMMED     [7:0]
 `define NPROC     2
 
-// OPS for instructions with unique opcodes
+/* OPS for instructions with unique opcodes */
 `define OPadd    4'b0001
 `define OPand    4'b0010
 `define OPmul    4'b0011
@@ -28,12 +29,12 @@
 `define OPjump   4'b1101
 `define OPjumpf  4'b1110
 
-// Opcodes for instructions with non-unique opcodes
+/* Opcodes for instructions with non-unique opcodes */
 `define OPnoarg  4'b0000
 `define OPtwoarg 4'b1011
 `define OPaddr   4'b1111
 
-// 5 bit OPS for instructions without unique opcodes
+/* 5 bit OPS for instructions without unique opcodes */
 `define OPtrap   5'b10000
 `define OPret    5'b10001
 `define OPallen  5'b10010
@@ -68,7 +69,6 @@ always @(op, in1, in2) begin
     `OPxor: begin result = in1 ^ in2; end
     `OPlnot: begin result = ~in1; end
     `OPneg: begin result = -in1; end
-    `OPgor: begin result = in1; end
     `OPli8: begin result = in1; end
     `OPlu8: begin result = in1; end
     default: begin result = in1; end
@@ -140,11 +140,14 @@ reg `WORD tempgor;
 
 decode decoder(op, regdst, ir);
 
+/* Generate NPROC processing elements */
 genvar i;
 for (i=0; i<`NPROC; i=i+1) begin
   PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1], enbits[i], gor, i);
 end
 
+
+/* Perform gor */
 integer j;
 always @(*) begin
   tempgor = 0;
@@ -154,6 +157,7 @@ always @(*) begin
   gor = tempgor;
 end
 
+/* Handle reset signal */
 always @(reset) begin
   pc = 0;
   s0op = `OPnop;
@@ -168,19 +172,18 @@ always @(*) ir = instrmem[pc];
 
 /* Get new PC value */
 always @(*) begin
-  // Ignore jump, call, ret, jumpf for now
   if (op == `OPaddr && s0op != `OPjumpf) newpc = addr;
   else if (op == `OPaddr && s0op == `OPjumpf && enbits == 0) newpc = addr;
   else if (op == `OPret) newpc = callstack[15:0] + 2;
   else newpc = pc + 1;
 end
 
-// compute current jump address
+/* compute current jump address */
 always @(*) begin
   addr = {ir `S, ir `T, s0s, s0t};
 end
 
-// handle callstack
+/* handle callstack */
 always @(posedge clk) begin
   callstackcopy = callstack;
   if (op == `OPcall) callstack = { callstackcopy[47:0], pc };
@@ -222,6 +225,7 @@ wire `WORD alures;
 
 alu myalu(alures, s1op, s1sval, s1tval);
 
+/* Handle reset signal */
 always @(reset) begin
   halt = 0;
   s1regdst = 0;
@@ -233,13 +237,8 @@ always @(reset) begin
   regfile[2] = `NPROC;
 end
 
-/* determine which result to save into a register */
+/* Determine which result to save into a register */
 always @(*) begin
-  $display("u0: %d\n", $signed(regfile[6]));
-  $display("u1: %d\n", $signed(regfile[7]));
-  $display("u2: %d\n", $signed(regfile[8]));
-  $display("u3: %d\n", $signed(regfile[9]));
-  $display("IPROC: %d\n", $signed(regfile[1]));
   if (s1op == `OPload) res = datamem[s1sval];
   else if (s1op == `OPgor) res = gor;
   else if (s1op == `OPleft) res = left;
@@ -247,26 +246,24 @@ always @(*) begin
   else res = alures;
 end
 
-// Determine future enable status for jumpf
-always @(*) begin
-  enbit = (enstack[0] && dval);
-end
+/* Determine future enable status for jumpf */
+always @(*) enbit = (enstack[0] && dval);
 
-// compute sval with value forwarding
+/* compute sval with value forwarding */
 always @(*) begin
   if (s1regdst != 0 && (s0s == s1regdst)) sval = res;
   else if (s2regdst != 0 && (s0s == s2regdst)) sval = s2val;
   else sval = regfile[s0s];
 end
 
-// compute dval with value forwarding
+/* compute dval with value forwarding */
 always @(*) begin
   if (s1regdst != 0 && (s0d == s1regdst)) dval = res;
   else if (s2regdst != 0 && (s0d == s2regdst)) dval = s2val;
   else dval = regfile[s0d];
 end
 
-// compute tval with value forwarding
+/* compute tval with value forwarding */
 always @(*) begin
   if (s1regdst != 0 && (s0t == s1regdst)) tval = res;
   else if (s2regdst != 0 && (s0t == s2regdst)) tval = s2val;
@@ -275,16 +272,10 @@ end
 
 /* Stage 1 - Register read */
 always @(posedge clk) if (!halt) begin
-  if (s0op == `OPleft || s0op == `OPright || s0op == `OPgor) begin
-    comm <= sval;
-  end
-  if (s0op == `OPli8) begin
-    s1sval <= {{8{s0s[3]}}, s0s, s0t};
-  end else if (s0op == `OPlu8) begin
-    s1sval <= {s0s, s0t, dval[7:0]};
-  end else begin
-    s1sval <= sval;
-  end
+  if (s0op == `OPleft || s0op == `OPright || s0op == `OPgor) comm <= sval;
+  if (s0op == `OPli8) s1sval <= {{8{s0s[3]}}, s0s, s0t};
+  else if (s0op == `OPlu8) s1sval <= {s0s, s0t, dval[7:0]};
+  else s1sval <= sval;
   s1op <= s0op;
   s1tval <= tval;
   s1dval <= dval;
@@ -317,6 +308,7 @@ end
 
 endmodule
 
+/* Testbench module - run until processor halts */
 module testbench;
 reg reset = 0;
 reg clk = 0;
