@@ -1,4 +1,5 @@
 `define WORD      [15:0]
+`define INT       [31:0]
 `define REGSIZE   [15:0]
 `define REGNAME   [3:0]
 `define MEMSIZE   [65535:0]
@@ -133,13 +134,24 @@ wire `REGNAME regdst;
 reg `REGNAME s0regdst, s0s, s0d, s0t;
 wire `WORD comm[(`NPROC - 1):0];
 wire [`NPROC - 1:0] enbits;
+reg `WORD gor;
+reg `WORD tempgor;
 
 
 decode decoder(op, regdst, ir);
 
 genvar i;
 for (i=0; i<`NPROC; i=i+1) begin
-  PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1], enbits[i]);
+  PE pe(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm[i], comm[i - 1 == -1 ? `NPROC - 1 : i - 1], comm[i + 1 == `NPROC ? 0 : i + 1], enbits[i], gor, i);
+end
+
+integer j;
+always @(*) begin
+  tempgor = 0;
+  for (j=0; j<`NPROC; j=j+1) begin
+    tempgor = tempgor | comm[j];
+  end
+  gor = tempgor;
 end
 
 always @(reset) begin
@@ -188,7 +200,7 @@ end
 endmodule
 
 /* Processing element */
-module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm, left, right, enbit);
+module PE(halt, reset, clk, s0s, s0d, s0t, s0op, s0regdst, comm, left, right, enbit, gor, IPROC);
 input reset, clk;
 output reg halt;
 input `REGNAME s0s, s0d, s0t, s0regdst;
@@ -197,6 +209,8 @@ output reg `WORD comm;
 input `WORD left;
 input `WORD right;
 output reg enbit;
+input `WORD gor;
+input `INT IPROC;
 
 reg `WORD regfile `REGSIZE;
 reg `WORD datamem `MEMSIZE;
@@ -215,16 +229,19 @@ always @(reset) begin
   s1op = `OPnop;
   s2op = `OPnop;
   $readmemh0(regfile);
-  //regfile[2] = IPROC;
+  regfile[1] = IPROC;
+  regfile[2] = `NPROC;
 end
 
 /* determine which result to save into a register */
 always @(*) begin
-  $display("u0: %d\n", regfile[6]);
-  $display("u1: %d\n", regfile[7]);
-  $display("u2: %d\n", regfile[8]);
-  $display("u3: %d\n", regfile[9]);
+  $display("u0: %d\n", $signed(regfile[6]));
+  $display("u1: %d\n", $signed(regfile[7]));
+  $display("u2: %d\n", $signed(regfile[8]));
+  $display("u3: %d\n", $signed(regfile[9]));
+  $display("IPROC: %d\n", $signed(regfile[1]));
   if (s1op == `OPload) res = datamem[s1sval];
+  else if (s1op == `OPgor) res = gor;
   else if (s1op == `OPleft) res = left;
   else if (s1op == `OPright) res = right;
   else res = alures;
@@ -258,7 +275,7 @@ end
 
 /* Stage 1 - Register read */
 always @(posedge clk) if (!halt) begin
-  if (s0op == `OPleft || s0op == `OPright) begin
+  if (s0op == `OPleft || s0op == `OPright || s0op == `OPgor) begin
     comm <= sval;
   end
   if (s0op == `OPli8) begin
